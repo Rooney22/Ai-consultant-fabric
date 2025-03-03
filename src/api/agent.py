@@ -10,10 +10,6 @@ router = APIRouter(
 )
 
 
-@router.post("/inputCSV", status_code=status.HTTP_200_OK, name="Ввод данных формата csv")
-async def input_data(file: UploadFile, methods_service: AgentService = Depends()):
-    return await methods_service.insert(file.file)
-
 @router.get("/collections/get")
 async def read_collections():
     try:
@@ -22,6 +18,7 @@ async def read_collections():
         return {"collections": collections}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
     
 @router.get("/agents/get")
 async def read_agents():
@@ -35,7 +32,6 @@ async def read_agents():
 @router.post("/agents/create")
 async def create_agent_endpoint(agent_data: AgentRequest):
     try:
-        # Вызываем асинхронную функцию для создания агента
         await AgentService.create_agent(
             agent_name=agent_data.agent_name,
             agent_prompt=agent_data.agent_prompt,
@@ -48,17 +44,15 @@ async def create_agent_endpoint(agent_data: AgentRequest):
 @router.get("/answer/")
 async def get_answer_endpoint(agent_name: str, user_question: str):
     try:
-        # Вызываем асинхронную функцию для получения ответа
         answer = await AgentService.get_answer(agent_name=agent_name, user_question=user_question)
         return {"answer": answer}
     except Exception as e:
-        # В случае ошибки возвращаем HTTP 500
         raise HTTPException(status_code=500, detail=str(e))
     
 @router.post("/collections/create")
 async def create_collection_endpoint(
     collection_name: str,
-    files: List[UploadFile] = File(...)  # Принимаем список файлов
+    files: List[UploadFile] = File(...)
 ):
     try:
         for file in files:

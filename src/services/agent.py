@@ -42,7 +42,7 @@ class AgentService:
         vector_db = Milvus.from_documents(
             documents,
             embeddings,
-            connection_args={"host": "localhost", "port": "19530"},
+            connection_args={"host": settings.milvus_host, "port": settings.milvus_port},
             collection_name=collection_name
         )
 
@@ -73,7 +73,7 @@ class AgentService:
             vector_db = Milvus(
                 embedding_function=embeddings,
                 collection_name=collection_name,
-                connection_args={"host": "localhost", "port": "19530"}
+                connection_args={"host": settings.milvus_host, "port": settings.milvus_port}
             )
             milvus_documents = vector_db.similarity_search(query="", k=1000)
             bm25_documents = [

@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     base_port: int
     base_name: str
     gigachat_credentials: str
+    milvus_host: str
+    milvus_port: str
 
 
 settings = Settings(

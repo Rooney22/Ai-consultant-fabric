@@ -1,6 +1,10 @@
 import pandas as pd
 from typing import BinaryIO
 from src.core.settings import settings
+from src.db.db import Session
+from src.models.agent import Agent
+from src.models.collection import Collection
+from src.models.agent_collection import AgentCollection
 from langchain_community.document_loaders import CSVLoader, PyPDFLoader
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Milvus
@@ -12,9 +16,11 @@ from langchain_community.retrievers import BM25Retriever
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.docstore.document import Document
 from langchain.retrievers import EnsembleRetriever
+from sqlalchemy import select
+
 
 class AgentService:
-    async def create_collection(collection_name: str, collection_description: str, input_files: list[BinaryIO]):
+    async def create_collection(collection_name: str, input_files: list[BinaryIO]):
         documents = []
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)  # Разбиение текста на чанки
 
@@ -36,67 +42,79 @@ class AgentService:
             collection_name=collection_name
         )
 
-    async def create_chain_from_existing_collection(system_prompt: str, collection_name: str):
+        async with Session() as session:
+            collection = Collection(collection_name=collection_name)
+            session.add(collection)
+            await session.commit()
 
-        # Инициализация модели для эмбеддингов
-        embeddings = HuggingFaceEmbeddings(model_name='deepvk/USER-bge-m3', cache_folder='../cache/embedding/')
 
-        # Подключение к существующей коллекции Milvus
-        vector_db = Milvus(
-            embedding_function=embeddings,
-            collection_name=collection_name,
-            connection_args={"host": "localhost", "port": "19530"}
-        )
+    async def get_answer(agent_name: str, user_question: str):
+        async with Session() as session:
+            q = select(Collection.collection_name, Agent.agent_prompt).\
+                select_from(
+                    Agent.join(
+                        AgentCollection, Agent.agent_id == AgentCollection.agent_id
+                    ).join(
+                        Collection, AgentCollection.collection_id == Agent.collection_id
+                    )
+                ).where(Agent.agent_name == agent_name)
 
-        # Извлечение документов из коллекции Milvus
-        # Предполагаем, что коллекция Milvus содержит поле "page_content" с текстом
-        milvus_documents = vector_db.similarity_search(query="", k=1000)  # Извлекаем все документы (или ограниченное количество)
+            # Выполняем запрос
+            result = await session.execute(q)
+            
+            embeddings = HuggingFaceEmbeddings(model_name='deepvk/USER-bge-m3', cache_folder='../cache/embedding/')
 
-        # Преобразование документов Milvus в формат, подходящий для BM25Retriever
-        bm25_documents = [
-            Document(page_content=doc.page_content, metadata=doc.metadata) for doc in milvus_documents
-        ]
+            vector_db = Milvus(
+                embedding_function=embeddings,
+                collection_name=result.collection_name,
+                connection_args={"host": "localhost", "port": "19530"}
+            )
+            milvus_documents = vector_db.similarity_search(query="", k=1000)
+            bm25_documents = [
+                Document(page_content=doc.page_content, metadata=doc.metadata) for doc in milvus_documents
+            ]
 
-        # Создание BM25Retriever на основе документов из Milvus
-        bm25_retriever = BM25Retriever.from_documents(bm25_documents, k=3)  # k — количество возвращаемых документов
+            bm25_retriever = BM25Retriever.from_documents(bm25_documents, k=3)  # k — количество возвращаемых документов
 
-        # Создание EnsembleRetriever
-        ensemble_retriever = EnsembleRetriever(
-            retrievers=[vector_db.as_retriever(), bm25_retriever],
-            weights=[0.7, 0.3]  # Веса для каждого ретривера (70% для Milvus, 30% для BM25)
-        )
+            ensemble_retriever = EnsembleRetriever(
+                retrievers=[vector_db.as_retriever(), bm25_retriever],
+                weights=[0.7, 0.3]
+            )
 
-        # Создание цепочки Langchain
-        template = system_prompt + "\n\nКонтекст:\n{context}\n\nВопрос: {question}\n\nОтвет:"
-        prompt = ChatPromptTemplate.from_template(template)
+            template = Agent.agent_prompt + "\n\nКонтекст:\n{context}\n\nВопрос: {question}\n\nОтвет:"
+            prompt = ChatPromptTemplate.from_template(template)
 
-        # Инициализация GigaChat LLM
-        llm = GigaChat(credentials=settings.gigachat_credentials)
+            llm = GigaChat(credentials=settings.gigachat_credentials)
 
-        # Создание цепочки
-        chain = (
-            {"context": ensemble_retriever, "question": RunnablePassthrough()}
-            | prompt
-            | llm
-            | StrOutputParser()
-        )
+            chain = (
+                {"context": ensemble_retriever, "question": RunnablePassthrough()}
+                | prompt
+                | llm
+                | StrOutputParser()
+            )
 
-        return chain
+        return chain.invoke(user_question)
     
-    async def create_agent(agent_name: str, collection_name: str):
-        '''
-        создание агента
-        '''
-        pass
+    async def create_agent(agent_name: str, agent_prompt: str, collection_name: str):
+        async with Session() as session:
+            agent = Agent(agent_name=agent_name, agent_prompt=agent_prompt)
+            q = (select(Collection)).where(Collection.collection_name == collection_name)
+            result = await session.execute(q)
+            collection = result.scalar_one_or_none()
+            session.add(agent)
+            await session.flush()
+            agent_collection = AgentCollection(agent_id=agent.agent_id, collection=collection.collection_id)
+            session.add(agent_collection)
+            await session.commit()
 
     async def get_agents():
-        '''
-        получить список агентов
-        '''
-        pass
+        async with Session() as session:
+            q = select(Agent.agent_name)
+            result = await session.execute(q)
+            return result
 
     async def get_collections():
-        '''
-        получить список коллекций
-        '''
-        pass
+        async with Session() as session:
+            q = select(Collection.collection_name)
+            result = await session.execute(q)
+            return result

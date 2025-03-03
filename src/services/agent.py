@@ -1,4 +1,5 @@
 import pandas as pd
+import os
 from typing import BinaryIO
 from src.core.settings import settings
 from src.db.db import Session
@@ -25,13 +26,16 @@ class AgentService:
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)  # Разбиение текста на чанки
 
         for file in input_files:
-            if file.name.endswith('.pdf'):
-                loader = PyPDFLoader(file)
-                pdf_docs = loader.load()
-                split_docs = text_splitter.split_documents(pdf_docs)
-                documents.extend(split_docs)
-            else:
-                raise ValueError("Неподдерживаемый формат файла. Поддерживаются только PDF файлы.")
+            file_path = f"temp_{file.filename}"
+            with open(file_path, "wb") as f:
+                f.write(file.file.read())
+
+            loader = PyPDFLoader(file_path)
+            pdf_docs = loader.load()
+            split_docs = text_splitter.split_documents(pdf_docs)
+            documents.extend(split_docs)
+
+            os.remove(file_path)
 
         embeddings = HuggingFaceEmbeddings(model_name='deepvk/USER-bge-m3', cache_folder='../cache/embedding/')
 
@@ -62,11 +66,13 @@ class AgentService:
             # Выполняем запрос
             result = await session.execute(q)
             
+            collection_name, agent_prompt = result.first()
+
             embeddings = HuggingFaceEmbeddings(model_name='deepvk/USER-bge-m3', cache_folder='../cache/embedding/')
 
             vector_db = Milvus(
                 embedding_function=embeddings,
-                collection_name=result.collection_name,
+                collection_name=collection_name,
                 connection_args={"host": "localhost", "port": "19530"}
             )
             milvus_documents = vector_db.similarity_search(query="", k=1000)
@@ -81,7 +87,7 @@ class AgentService:
                 weights=[0.7, 0.3]
             )
 
-            template = Agent.agent_prompt + "\n\nКонтекст:\n{context}\n\nВопрос: {question}\n\nОтвет:"
+            template = agent_prompt + "\n\nКонтекст:\n{context}\n\nВопрос: {question}\n\nОтвет:"
             prompt = ChatPromptTemplate.from_template(template)
 
             llm = GigaChat(credentials=settings.gigachat_credentials)

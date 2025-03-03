@@ -1,4 +1,5 @@
 import pandas as pd
+from typing import BinaryIO
 from src.core.settings import settings
 from langchain_community.document_loaders import CSVLoader, PyPDFLoader
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -13,18 +14,18 @@ from langchain.docstore.document import Document
 from langchain.retrievers import EnsembleRetriever
 
 class AgentService:
-    async def create_collection(collection_name: str, collection_description: str, file_paths: list):
+    async def create_collection(collection_name: str, collection_description: str, input_files: list[BinaryIO]):
         documents = []
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)  # Разбиение текста на чанки
 
-        for file_path in file_paths:
-            if file_path.endswith('.pdf'):
-                loader = PyPDFLoader(file_path)
+        for file in input_files:
+            if file.name.endswith('.pdf'):
+                loader = PyPDFLoader(file)
                 pdf_docs = loader.load()
                 split_docs = text_splitter.split_documents(pdf_docs)
                 documents.extend(split_docs)
             else:
-                raise ValueError("Неподдерживаемый формат файла. Поддерживаются только CSV, Excel и PDF файлы.")
+                raise ValueError("Неподдерживаемый формат файла. Поддерживаются только PDF файлы.")
 
         embeddings = HuggingFaceEmbeddings(model_name='deepvk/USER-bge-m3', cache_folder='../cache/embedding/')
 
@@ -81,3 +82,21 @@ class AgentService:
         )
 
         return chain
+    
+    async def create_agent(agent_name: str, collection_name: str):
+        '''
+        создание агента
+        '''
+        pass
+
+    async def get_agents():
+        '''
+        получить список агентов
+        '''
+        pass
+
+    async def get_collections():
+        '''
+        получить список коллекций
+        '''
+        pass

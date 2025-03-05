@@ -1,0 +1,16 @@
+sqlalchemy
+pydantic
+fastapi
+uvicorn
+pydantic-settings
+pandas
+psycopg2
+asyncpg
+numpy
+langchain
+langchain-community
+langchain-gigachat
+langchain-huggingface
+pypdf
+pymilvus
+rank_bm25

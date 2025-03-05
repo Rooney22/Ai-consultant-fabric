@@ -11,5 +11,3 @@ class AgentCollection(Base):
     agent_id = Column(Integer, ForeignKey('agent.agent_id'), primary_key=True)
     collection_id = Column(Integer, ForeignKey('collection.collection_id'), primary_key=True)
 
-    agent = relationship('Agent', back_populates='collections')
-    collection = relationship('Collection', back_populates='agents')

@@ -9,19 +9,15 @@ origins = [
 ]
 tags_dict = [
     {
-        'name': 'data',
-        'description': 'Работа с данными',
+        'name': 'agent',
+        'description': 'Работа с сервисом по созданию AI-агентов',
     },
-    {
-        'name': 'fraud',
-        'description': 'Работа с фродами'
-    }
 ]
 
 app = FastAPI(
-    title="OmSTU_Practice",
-    description="Практика",
-    version="0.1.0",
+    title="AI-consultant-service",
+    description="Лучший в мире сервис по созданию AI-агентов",
+    version="3.2.2",
     openapi_tags=tags_dict,
 )
 

@@ -6,3 +6,4 @@ class Collection(Base):
 
     collection_id = Column(Integer, primary_key=True, autoincrement=True)
     collection_name = Column(String(50), nullable=False)
+    collection_description = Column(String)

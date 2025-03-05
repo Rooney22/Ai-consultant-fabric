@@ -11,3 +11,6 @@ langchain
 langchain-community
 langchain-gigachat
 langchain-huggingface
+pypdf
+pymilvus
+rank_bm25

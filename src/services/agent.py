@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import ssl
 from typing import BinaryIO
 from src.core.settings import settings
 from src.db.db import Session
@@ -17,11 +18,11 @@ from langchain_community.retrievers import BM25Retriever
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.docstore.document import Document
 from langchain.retrievers import EnsembleRetriever
-from sqlalchemy import select
+from sqlalchemy import select, join
 
 
 class AgentService:
-    async def create_collection(collection_name: str, input_files: list[BinaryIO]):
+    async def create_collection(collection_name: str, input_files: list[BinaryIO], collection_description: str):
         documents = []
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)  # Разбиение текста на чанки
 
@@ -47,23 +48,26 @@ class AgentService:
         )
 
         async with Session() as session:
-            collection = Collection(collection_name=collection_name)
+            collection = Collection(collection_name=collection_name, collection_description=collection_description)
             session.add(collection)
             await session.commit()
 
 
     async def get_answer(agent_name: str, user_question: str):
         async with Session() as session:
-            q = select(Collection.collection_name, Agent.agent_prompt).\
-                select_from(
-                    Agent.join(
+            q = select(
+                        Collection.collection_name,
+                        Agent.agent_prompt
+                    ).select_from(
+                        Agent
+                    ).join(
                         AgentCollection, Agent.agent_id == AgentCollection.agent_id
                     ).join(
-                        Collection, AgentCollection.collection_id == Agent.collection_id
+                        Collection, AgentCollection.collection_id == Collection.collection_id
+                    ).where(
+                        Agent.agent_name == agent_name
                     )
-                ).where(Agent.agent_name == agent_name)
 
-            # Выполняем запрос
             result = await session.execute(q)
             
             collection_name, agent_prompt = result.first()
@@ -90,7 +94,8 @@ class AgentService:
             template = agent_prompt + "\n\nКонтекст:\n{context}\n\nВопрос: {question}\n\nОтвет:"
             prompt = ChatPromptTemplate.from_template(template)
 
-            llm = GigaChat(credentials=settings.gigachat_credentials)
+            ssl_context = ssl._create_unverified_context()
+            llm = GigaChat(credentials=settings.gigachat_credentials, ssl_context=ssl_context)
 
             chain = (
                 {"context": ensemble_retriever, "question": RunnablePassthrough()}
@@ -109,7 +114,9 @@ class AgentService:
             collection = result.scalar_one_or_none()
             session.add(agent)
             await session.flush()
-            agent_collection = AgentCollection(agent_id=agent.agent_id, collection=collection.collection_id)
+            print(agent.agent_id, collection.collection_id)
+            agent_collection = AgentCollection(agent_id=agent.agent_id, collection_id=collection.collection_id)
+            print(agent_collection)
             session.add(agent_collection)
             await session.commit()
 

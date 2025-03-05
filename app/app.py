@@ -65,8 +65,9 @@ if prompt := st.chat_input("What is up?"):
         )
         for word in response.split():
             yield word + " "
-            time.sleep(0.05)
+            time.sleep(0.08)
 
     with st.chat_message("assistant"):
         response = st.write_stream(response_generator())
+
     st.session_state.chats[st.session_state.current_chat].append({"role": "assistant", "content": response})

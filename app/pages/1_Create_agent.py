@@ -25,4 +25,3 @@ with st.form("my_form"):
         st.session_state.new_agent_name = new_agent_name
         st.session_state.file = file
         st.session_state.prompt = prompt
-        print(new_agent_name)

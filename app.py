@@ -12,6 +12,10 @@ tags_dict = [
         'name': 'agent',
         'description': 'Работа с сервисом по созданию AI-агентов',
     },
+    {
+        'name': 'collection',
+        'description': 'Работа с сервисом по созданию коллекций',
+    },
 ]
 
 app = FastAPI(

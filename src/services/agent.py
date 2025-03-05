@@ -114,20 +114,32 @@ class AgentService:
             collection = result.scalar_one_or_none()
             session.add(agent)
             await session.flush()
-            print(agent.agent_id, collection.collection_id)
             agent_collection = AgentCollection(agent_id=agent.agent_id, collection_id=collection.collection_id)
-            print(agent_collection)
             session.add(agent_collection)
             await session.commit()
 
     async def get_agents():
         async with Session() as session:
-            q = select(Agent.agent_name)
+            q = select(Agent.agent_id, Agent.agent_name, Agent.agent_prompt)
             result = await session.execute(q)
             return result
 
     async def get_collections():
         async with Session() as session:
-            q = select(Collection.collection_name)
+            q = select(Collection.collection_id, Collection.collection_name, Collection.collection_description)
             result = await session.execute(q)
             return result
+        
+    async def update_agent_prompt(agent_id: int, new_prompt: str) -> Agent:
+
+        async with Session() as session:
+            result = await session.execute(select(Agent).filter(Agent.agent_id == agent_id))
+            agent = result.scalars().first()
+            
+            if agent:
+                agent.agent_prompt = new_prompt
+                await session.commit()
+                await session.refresh(agent)
+                return agent
+            else:
+                return None

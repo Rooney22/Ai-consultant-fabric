@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, UploadFile, status, HTTPException, File
 from src.services.agent import AgentService
 from src.models.schemas.agent.agent_request import AgentRequest
+from src.models.agent import Agent
 from typing import List
 
 
@@ -9,23 +10,14 @@ router = APIRouter(
     tags=['agent'],
 )
 
-
-@router.get("/collections/get")
-async def read_collections():
-    result = await AgentService.get_collections()
-    collections = [row for row in result.scalars()]
-    return {"collections": collections}
-
-    
-
-@router.get("/agents/get")
+@router.get("/get")
 async def read_agents():
     result = await AgentService.get_agents()
-    agents = [row for row in result.scalars()]
-    return {"agents": agents}
+    agents = [{"agent_id": row.agent_id, "agent_name": row.agent_name, 'agent_prompt': row.agent_prompt} for row in result]
+    return agents
 
     
-@router.post("/agents/create")
+@router.post("/create")
 async def create_agent_endpoint(agent_data: AgentRequest):
     print(agent_data)
     await AgentService.create_agent(
@@ -35,23 +27,21 @@ async def create_agent_endpoint(agent_data: AgentRequest):
     )
     return {"message": "Agent created successfully"}
 
-@router.get("/answer/")
+@router.get("/answer")
 async def get_answer_endpoint(agent_name: str, user_question: str):
     try:
         answer = await AgentService.get_answer(agent_name=agent_name, user_question=user_question)
         return {"answer": answer}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
-@router.post("/collections/create")
-async def create_collection_endpoint(
-    collection_name: str,
-    collection_description: str,
-    files: List[UploadFile] = File(...)
-):
-        for file in files:
-            if not file.filename.endswith('.pdf'):
-                raise HTTPException(status_code=400, detail="Неподдерживаемый формат файла. Поддерживаются только PDF файлы.")
 
-        await AgentService.create_collection(collection_name=collection_name, input_files=files, collection_description=collection_description)
-        return {"message": f"Коллекция '{collection_name}' успешно создана"}
+@router.put("/update_prompt")
+async def update_prompt(
+    agent_id: int,
+    new_prompt: str,
+):
+    updated_agent = await AgentService.update_agent_prompt(agent_id, new_prompt)
+
+    if not updated_agent:
+        raise HTTPException(status_code=404, detail="Агент с указанным ID не найден")
+    return {"message": "prompt changed successfully"}

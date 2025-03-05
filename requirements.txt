@@ -14,3 +14,4 @@ langchain-huggingface
 pypdf
 pymilvus
 rank_bm25
+streamlit

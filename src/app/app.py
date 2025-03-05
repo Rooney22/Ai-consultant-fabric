@@ -1,5 +1,6 @@
 import streamlit as st
 import random
+import requests
 import time
 
 default_chat_name = 'Основной чат'
@@ -12,7 +13,7 @@ if 'chats' not in st.session_state:
 if 'current_chat' not in st.session_state:
     st.session_state.current_chat = default_chat_name
 if 'selected_agent' not in st.session_state:
-    st.session_state.selected_agent = "Agent1"
+    st.session_state.selected_agent = "Test"
 
 if 'show_new_chat_form' not in st.session_state:
     st.session_state.show_new_chat_form = False
@@ -38,7 +39,10 @@ with st.sidebar:
     if st.session_state.show_new_chat_form:
         with st.form("new_chat_form"):
             chat_name = st.text_input("Название чата")
-            agent = st.selectbox("Выберите агента", ["Agent1", "Agent2", "Agent3"])
+            url = f'http://localhost:8000/agent/get'
+            result = requests.get(url=url)
+            agents = [agent['agent_name'] for agent in result.json()]
+            agent = st.selectbox("Выберите агента", agents)
             if st.form_submit_button("Создать чат"):
                 if chat_name in st.session_state.chats:
                     st.error("Чат с таким названием уже существует. Пожалуйста, выберите другое название.")
@@ -68,20 +72,14 @@ if prompt := st.chat_input("What is up?"):
     
     st.session_state.chats[st.session_state.current_chat].append({"role": "user", "content": prompt})
 
-    def response_generator():
-        response = random.choice(
-            [
-                "Hello there! How can I assist you today?",
-                "Hi, human! Is there anything I can help you with?",
-                "Do you need help?",
-            ]
-        )
-        for word in response.split():
-            yield word + " "
-            time.sleep(0.08)
-
     with st.chat_message("assistant"):
-        response = "".join(response_generator())  # Собираем слова в одну строку
-        st.markdown(response)
+        url = f'http://localhost:8000/agent/answer'
+        params = {
+            "agent_name": st.session_state.selected_agent,
+            "user_question": prompt  
+        }
+        response = requests.get(url, params=params)
+
+        st.markdown(response.json()['answer'])
     
     st.session_state.chats[st.session_state.current_chat].append({"role": "assistant", "content": response})

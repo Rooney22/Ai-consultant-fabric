@@ -1,7 +1,11 @@
 import streamlit as st
-import random
 import requests
-import time
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+from src.core.settings import settings
 
 default_chat_name = 'Основной чат'
 
@@ -39,7 +43,7 @@ with st.sidebar:
     if st.session_state.show_new_chat_form:
         with st.form("new_chat_form"):
             chat_name = st.text_input("Название чата")
-            url = f'http://localhost:8000/agent/get'
+            url = f'http://{settings.host}:{settings.port}/agent/get'
             result = requests.get(url=url)
             agents = [agent['agent_name'] for agent in result.json()]
             agent = st.selectbox("Выберите агента", agents)
@@ -73,7 +77,7 @@ if prompt := st.chat_input("What is up?"):
     st.session_state.chats[st.session_state.current_chat].append({"role": "user", "content": prompt})
 
     with st.chat_message("assistant"):
-        url = f'http://localhost:8000/agent/answer'
+        url = f'http://{settings.host}:{settings.port}/agent/answer'
         params = {
             "agent_name": st.session_state.selected_agent,
             "user_question": prompt  

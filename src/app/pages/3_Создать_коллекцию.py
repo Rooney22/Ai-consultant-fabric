@@ -1,6 +1,13 @@
 import streamlit as st
 import requests
-#from src.core.settings import settings
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
+
+from src.core.settings import settings
+
+
 
 st.set_page_config(page_title="Create collection")
 
@@ -14,7 +21,7 @@ with st.form("my_form"):
 
     submitted = st.form_submit_button("Submit")
     if submitted:
-        url = f'http://localhost:8000/collection/create'
+        url = f'http://{settings.host}:{settings.port}/collection/create'
         data = {
             "collection_name": new_collection_name,
             "collection_description": description

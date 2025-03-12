@@ -1,6 +1,11 @@
 import streamlit as st
 import requests
+import sys
+import os
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
+
+from src.core.settings import settings
 
 def get_info(agent_name: str, json: list[dict]) -> int:
     i = 0
@@ -9,7 +14,7 @@ def get_info(agent_name: str, json: list[dict]) -> int:
     return (json[i]['agent_id'], json[i]['agent_prompt'])
 
 
-url = f'http://localhost:8000/agent/get'
+url = f'http://{settings.host}:{settings.port}/agent/get'
 result = requests.get(url=url)
 agents = [agent['agent_name'] for agent in result.json()]
 editing_agent = st.selectbox("Редактируемый агент", agents)
@@ -29,7 +34,7 @@ if st.session_state.show_confirmation:
         submitted = st.form_submit_button("Изменить промпт")
         
         if submitted:
-            url = f'http://localhost:8000/agent/update_prompt'
+            url = f'http://{settings.host}:{settings.port}/agent/update_prompt'
             params = {
                 "agent_id": agent_id, 
                 "new_prompt": prompt 

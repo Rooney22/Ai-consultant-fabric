@@ -19,7 +19,6 @@ async def read_agents():
     
 @router.post("/create")
 async def create_agent_endpoint(agent_data: AgentRequest):
-    print(agent_data)
     await AgentService.create_agent(
         agent_name=agent_data.agent_name,
         agent_prompt=agent_data.agent_prompt,

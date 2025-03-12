@@ -1,5 +1,11 @@
 import streamlit as st
 import requests
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
+
+from src.core.settings import settings
 
 st.set_page_config(page_title="Create agent")
 
@@ -22,7 +28,7 @@ st.title("Создание агента")
 
 with st.form("my_form"):
 
-    url = f'http://localhost:8000/collection/get'
+    url = f'http://{settings.host}:{settings.port}/collection/get'
     result = requests.get(url=url)
     collection_names = [collection['collection_name'] for collection in result.json()]
     new_agent_name = st.text_input("Имя агента", st.session_state.new_agent_name)
@@ -35,7 +41,7 @@ with st.form("my_form"):
 
     submitted = st.form_submit_button("Submit")
     if submitted:
-        url = f'http://localhost:8000/agent/create'
+        url = f'http://{settings.host}:{settings.port}/agent/create'
         payload={
             'agent_name' : new_agent_name,
             'agent_prompt': prompt,

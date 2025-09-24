@@ -2,4 +2,4 @@
 
 Данный сервис позволяет задавать промпт для AI-агентов, а также обрабатывать и хранить документы для их использования.
 
-Стэк: FastApi, streamlit, langchain, langchain-gigachat, sqlalchemy
+Стэк: FastApi, streamlit, langchain, langchain-gigachat, sqlalchemy, Milvus.

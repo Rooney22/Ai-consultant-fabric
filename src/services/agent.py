@@ -1,0 +1,145 @@
+import pandas as pd
+import os
+import ssl
+from typing import BinaryIO
+from src.core.settings import settings
+from src.db.db import Session
+from src.models.agent import Agent
+from src.models.collection import Collection
+from src.models.agent_collection import AgentCollection
+from langchain_community.document_loaders import CSVLoader, PyPDFLoader
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import Milvus
+from langchain_core.prompts import ChatPromptTemplate
+from langchain.schema import StrOutputParser
+from langchain_core.runnables import RunnablePassthrough
+from langchain_gigachat import GigaChat
+from langchain_community.retrievers import BM25Retriever
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.docstore.document import Document
+from langchain.retrievers import EnsembleRetriever
+from sqlalchemy import select, join
+
+
+class AgentService:
+    async def create_collection(collection_name: str, input_files: list[BinaryIO], collection_description: str):
+        documents = []
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)  # Разбиение текста на чанки
+
+        for file in input_files:
+            file_path = f"temp_{file.filename}"
+            with open(file_path, "wb") as f:
+                f.write(file.file.read())
+
+            loader = PyPDFLoader(file_path)
+            pdf_docs = loader.load()
+            split_docs = text_splitter.split_documents(pdf_docs)
+            documents.extend(split_docs)
+
+            os.remove(file_path)
+
+        embeddings = HuggingFaceEmbeddings(model_name='deepvk/USER-bge-m3', cache_folder='../cache/embedding/')
+
+        vector_db = Milvus.from_documents(
+            documents,
+            embeddings,
+            connection_args={"host": settings.milvus_host, "port": settings.milvus_port},
+            collection_name=collection_name
+        )
+
+        async with Session() as session:
+            collection = Collection(collection_name=collection_name, collection_description=collection_description)
+            session.add(collection)
+            await session.commit()
+
+
+    async def get_answer(agent_name: str, user_question: str):
+        async with Session() as session:
+            q = select(
+                        Collection.collection_name,
+                        Agent.agent_prompt
+                    ).select_from(
+                        Agent
+                    ).join(
+                        AgentCollection, Agent.agent_id == AgentCollection.agent_id
+                    ).join(
+                        Collection, AgentCollection.collection_id == Collection.collection_id
+                    ).where(
+                        Agent.agent_name == agent_name
+                    )
+
+            result = await session.execute(q)
+            
+            collection_name, agent_prompt = result.first()
+
+            embeddings = HuggingFaceEmbeddings(model_name='deepvk/USER-bge-m3', cache_folder='../cache/embedding/')
+
+            vector_db = Milvus(
+                embedding_function=embeddings,
+                collection_name=collection_name,
+                connection_args={"host": settings.milvus_host, "port": settings.milvus_port}
+            )
+            milvus_documents = vector_db.similarity_search(query="", k=1000)
+            bm25_documents = [
+                Document(page_content=doc.page_content, metadata=doc.metadata) for doc in milvus_documents
+            ]
+
+            bm25_retriever = BM25Retriever.from_documents(bm25_documents, k=3)  # k — количество возвращаемых документов
+
+            ensemble_retriever = EnsembleRetriever(
+                retrievers=[vector_db.as_retriever(), bm25_retriever],
+                weights=[0.7, 0.3]
+            )
+
+            template = agent_prompt + "\n\nКонтекст:\n{context}\n\nВопрос: {question}\n\nОтвет:"
+            prompt = ChatPromptTemplate.from_template(template)
+
+            ssl_context = ssl._create_unverified_context()
+            llm = GigaChat(credentials=settings.gigachat_credentials, ssl_context=ssl_context)
+
+            chain = (
+                {"context": ensemble_retriever, "question": RunnablePassthrough()}
+                | prompt
+                | llm
+                | StrOutputParser()
+            )
+
+        return chain.invoke(user_question)
+    
+    async def create_agent(agent_name: str, agent_prompt: str, collection_name: str):
+        async with Session() as session:
+            agent = Agent(agent_name=agent_name, agent_prompt=agent_prompt)
+            q = (select(Collection)).where(Collection.collection_name == collection_name)
+            result = await session.execute(q)
+            collection = result.scalar_one_or_none()
+            session.add(agent)
+            await session.flush()
+            agent_collection = AgentCollection(agent_id=agent.agent_id, collection_id=collection.collection_id)
+            session.add(agent_collection)
+            await session.commit()
+
+    async def get_agents():
+        async with Session() as session:
+            q = select(Agent.agent_id, Agent.agent_name, Agent.agent_prompt)
+            result = await session.execute(q)
+            return result
+
+    async def get_collections():
+        async with Session() as session:
+            q = select(Collection.collection_id, Collection.collection_name, Collection.collection_description)
+            result = await session.execute(q)
+            return result
+        
+    async def update_agent_prompt(agent_id: int, new_prompt: str) -> Agent:
+
+        async with Session() as session:
+            result = await session.execute(select(Agent).filter(Agent.agent_id == agent_id))
+            agent = result.scalars().first()
+            
+            if agent:
+                agent.agent_prompt = new_prompt
+                await session.commit()
+                await session.refresh(agent)
+                return agent
+            else:
+                return None
